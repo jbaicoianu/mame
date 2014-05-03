@@ -35,6 +35,7 @@ src/osd/sdl/shader/*.fsh svneol=native#text/plain
 *.js svneol=native#text/javascript
 readme svneol=native#text/plain
 README svneol=native#text/plain
+src/mame/layout/fireball.lay svneol=native#text/plain
 src/mame/layout/gunnrose.lay svneol=native#text/plain
 src/mess/drivers/ymmu100.ppm -text
 src/mess/layout/pve500.lay svneol=native#text/plain
