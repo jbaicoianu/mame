@@ -38,5 +38,7 @@ README svneol=native#text/plain
 src/mame/layout/fireball.lay svneol=native#text/plain
 src/mame/layout/gunnrose.lay svneol=native#text/plain
 src/mame/layout/sc4dnd.lay svneol=native#text/plain
+src/mame/layout/sc4dnddw.lay svneol=native#text/plain
+src/mame/layout/sc4dndtp.lay svneol=native#text/plain
 src/mess/drivers/ymmu100.ppm -text
 src/mess/layout/pve500.lay svneol=native#text/plain
