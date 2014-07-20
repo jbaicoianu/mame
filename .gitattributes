@@ -42,6 +42,7 @@ src/mame/layout/kenseim.lay svneol=native#text/plain
 src/mame/layout/sc4dnd.lay svneol=native#text/plain
 src/mame/layout/sc4dnddw.lay svneol=native#text/plain
 src/mame/layout/sc4dndtp.lay svneol=native#text/plain
+src/mess/drivers/ti74.c svneol=native#text/xml
 src/mess/drivers/ymmu100.ppm -text
 src/mess/layout/pve500.lay svneol=native#text/plain
 src/mess/layout/tecnbras.lay svneol=native#text/plain
