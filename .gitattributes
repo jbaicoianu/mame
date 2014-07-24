@@ -38,6 +38,7 @@ README svneol=native#text/plain
 hash/mbc200.xml svneol=native#text/plain
 src/mame/layout/fireball.lay svneol=native#text/plain
 src/mame/layout/gp_1.lay svneol=native#text/plain
+src/mame/layout/gp_2.lay svneol=native#text/plain
 src/mame/layout/gunnrose.lay svneol=native#text/plain
 src/mame/layout/kenseim.lay svneol=native#text/plain
 src/mame/layout/sc4dnd.lay svneol=native#text/plain
