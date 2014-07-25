@@ -35,5 +35,4 @@ src/osd/sdl/shader/*.fsh svneol=native#text/plain
 *.js svneol=native#text/javascript
 readme svneol=native#text/plain
 README svneol=native#text/plain
-src/mess/drivers/ti74.c svneol=native#text/xml
 src/mess/drivers/ymmu100.ppm -text
