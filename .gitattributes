@@ -38,3 +38,4 @@ README svneol=native#text/plain
 hash/mbc200.xml svneol=native#text/plain
 src/mess/drivers/ti74.c svneol=native#text/xml
 src/mess/drivers/ymmu100.ppm -text
+src/mess/layout/rainbow.lh svneol=native#text/plain
