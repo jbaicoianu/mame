@@ -36,4 +36,5 @@ src/osd/sdl/shader/*.fsh svneol=native#text/plain
 readme svneol=native#text/plain
 README svneol=native#text/plain
 src/mame/drivers/mgames.c svneol=native#text/xml
+src/mame/layout/by17.lay svneol=native#text/plain
 src/mess/drivers/ymmu100.ppm -text
