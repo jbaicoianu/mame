@@ -54,6 +54,8 @@ NO_USE_XINPUT = 1
 
 USE_DISPATCH_GL = 1
 
+USE_WEBGL = 1
+
 # The following settings are currently supported for unix only.
 # There is no need to play with this option unless you are doing
 # active development on sdlmame or SDL.
@@ -692,6 +694,10 @@ LIBS += -L$(MESA_INSTALL_ROOT)/lib
 LDFLAGS += -Wl,-rpath=$(MESA_INSTALL_ROOT)/lib
 INCPATH += -I$(MESA_INSTALL_ROOT)/include
 endif
+endif
+
+ifeq ($(USE_WEBGL),1)
+DEFS += -DUSE_WEBGL=1
 endif
 
 #-------------------------------------------------

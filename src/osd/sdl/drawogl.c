@@ -120,6 +120,18 @@ typedef void (APIENTRYP PFNGLDELETERENDERBUFFERSEXTPROC) (GLsizei n, const GLuin
 #define HASH_SIZE       ((1<<10)+1)
 #define OVERFLOW_SIZE   (1<<10)
 
+#ifdef USE_WEBGL
+#define DRAWOGL_TEXTURE_INTERNALFORMAT GL_RGBA
+#define DRAWOGL_TEXTURE_FORMAT GL_RGBA
+#define DRAWOGL_TEXTURE_TYPE GL_UNSIGNED_BYTE
+#define DRAWOGL_TEXTURE_CLAMP GL_CLAMP_TO_EDGE
+#else
+#define DRAWOGL_TEXTURE_INTERNALFORMAT GL_RGBA8
+#define DRAWOGL_TEXTURE_FORMAT GL_BGRA
+#define DRAWOGL_TEXTURE_TYPE GL_UNSIGNED_INT_8_8_8_8_REV
+#define DRAWOGL_TEXTURE_CLAMP GL_CLAMP_TO_BORDER
+#endif
+
 // OSD headers
 #include "osdsdl.h"
 #include "window.h"
@@ -659,7 +671,7 @@ static int drawogl_window_create(sdl_window_info *window, int width, int height)
 
 	if (strstr(extstr, "GL_ARB_vertex_buffer_object"))
 	{
-					sdl->usevbo = video_config.vbo;
+		sdl->usevbo = video_config.vbo;
 		if (!shown_video_info)
 		{
 			if(sdl->usevbo)
@@ -1215,6 +1227,7 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 		// we're doing nothing 3d, so the Z-buffer is currently not interesting
 		glDisable(GL_DEPTH_TEST);
 
+#ifndef USE_WEBGL
 		if (window->machine().options().antialias())
 		{
 			// enable antialiasing for lines
@@ -1231,6 +1244,7 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 			glDisable(GL_LINE_SMOOTH);
 			glDisable(GL_POINT_SMOOTH);
 		}
+#endif
 
 		// enable blending
 		glEnable(GL_BLEND);
@@ -1860,23 +1874,23 @@ static int texture_fbo_create(UINT32 text_unit, UINT32 text_name, UINT32 fbo_nam
 	glBindTexture(GL_TEXTURE_2D, text_name);
 	{
 		GLint _width, _height;
-		if ( gl_texture_check_size(GL_TEXTURE_2D, 0, GL_RGBA8, width, height,
-						0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, &_width, &_height, 1) )
+		if ( gl_texture_check_size(GL_TEXTURE_2D, 0, DRAWOGL_TEXTURE_INTERNALFORMAT, width, height,
+						0, DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, &_width, &_height, 1) )
 		{
 			osd_printf_error("cannot create fbo texture, req: %dx%d, avail: %dx%d - bail out\n",
 						width, height, (int)_width, (int)_height);
 			return -1;
 		}
 
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height,
-				0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL );
+		glTexImage2D(GL_TEXTURE_2D, 0, DRAWOGL_TEXTURE_INTERNALFORMAT, width, height,
+				0, DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, NULL );
 	}
 	// non-screen textures will never be filtered
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, DRAWOGL_TEXTURE_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, DRAWOGL_TEXTURE_CLAMP);
 
 	pfn_glFramebufferTexture2D(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT,
 					GL_TEXTURE_2D, text_name, 0);
@@ -2054,14 +2068,16 @@ static int texture_shader_create(sdl_window_info *window,
 	pfn_glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture->texture);
 
+#ifndef USE_WEBGL
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, texture->rawwidth_create);
+#endif
 
 	UINT32 * dummy = NULL;
 	GLint _width, _height;
-	if ( gl_texture_check_size(GL_TEXTURE_2D, 0, GL_RGBA8,
+	if ( gl_texture_check_size(GL_TEXTURE_2D, 0, DRAWOGL_TEXTURE_INTERNALFORMAT,
 					texture->rawwidth_create, texture->rawheight_create,
 					0,
-					GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV,
+					DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE,
 					&_width, &_height, 1) )
 	{
 		osd_printf_error("cannot create bitmap texture, req: %dx%d, avail: %dx%d - bail out\n",
@@ -2071,10 +2087,10 @@ static int texture_shader_create(sdl_window_info *window,
 
 	dummy = (UINT32 *) malloc(texture->rawwidth_create * texture->rawheight_create * sizeof(UINT32));
 	memset(dummy, 0, texture->rawwidth_create * texture->rawheight_create * sizeof(UINT32));
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+	glTexImage2D(GL_TEXTURE_2D, 0, DRAWOGL_TEXTURE_INTERNALFORMAT,
 			texture->rawwidth_create, texture->rawheight_create,
 			0,
-			GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, dummy);
+			DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, dummy);
 			glFinish(); // should not be necessary, .. but make sure we won't access the memory after free
 	free(dummy);
 
@@ -2101,8 +2117,8 @@ static int texture_shader_create(sdl_window_info *window,
 	}
 	else
 	{
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, DRAWOGL_TEXTURE_CLAMP);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, DRAWOGL_TEXTURE_CLAMP);
 	}
 
 	GL_CHECK_ERROR_NORMAL();
@@ -2206,10 +2222,10 @@ static texture_info *texture_create(sdl_window_info *window, const render_texinf
 		glBindTexture(texture->texTarget, texture->texture);
 
 		// this doesn't actually upload, it just sets up the PBO's parameters
-		glTexImage2D(texture->texTarget, 0, GL_RGBA8,
+		glTexImage2D(texture->texTarget, 0, DRAWOGL_TEXTURE_INTERNALFORMAT,
 				texture->rawwidth_create, texture->rawheight_create,
 				texture->borderpix ? 1 : 0,
-				GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL);
+				DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, NULL);
 
 		if ((PRIMFLAG_GET_SCREENTEX(flags)) && video_config.filter)
 		{
@@ -2227,8 +2243,8 @@ static texture_info *texture_create(sdl_window_info *window, const render_texinf
 		if( texture->texTarget==GL_TEXTURE_RECTANGLE_ARB )
 		{
 			// texture rectangles can't wrap
-			glTexParameteri(GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-			glTexParameteri(GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+			glTexParameteri(GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_S, DRAWOGL_TEXTURE_CLAMP);
+			glTexParameteri(GL_TEXTURE_RECTANGLE_ARB, GL_TEXTURE_WRAP_T, DRAWOGL_TEXTURE_CLAMP);
 		} else {
 			// set wrapping mode appropriately
 			if (texture->flags & PRIMFLAG_TEXWRAP_MASK)
@@ -2238,8 +2254,8 @@ static texture_info *texture_create(sdl_window_info *window, const render_texinf
 			}
 			else
 			{
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, DRAWOGL_TEXTURE_CLAMP);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, DRAWOGL_TEXTURE_CLAMP);
 			}
 		}
 	}
@@ -2650,41 +2666,47 @@ static void texture_set_data(texture_info *texture, const render_texinfo *texsou
 		pfn_glActiveTexture(GL_TEXTURE0);
 		glBindTexture(texture->texTarget, texture->texture);
 
+#ifndef USE_WEBGL
 		if (texture->nocopy)
 			glPixelStorei(GL_UNPACK_ROW_LENGTH, texture->texinfo.rowpixels);
 		else
 			glPixelStorei(GL_UNPACK_ROW_LENGTH, texture->rawwidth);
+#endif
 
 		// and upload the image
 		glTexSubImage2D(texture->texTarget, 0, 0, 0, texture->rawwidth, texture->rawheight,
-				GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, texture->data);
+				DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, texture->data);
 	}
 	else if ( texture->type == TEXTURE_TYPE_DYNAMIC )
 	{
 		glBindTexture(texture->texTarget, texture->texture);
 
+#ifndef USE_WEBGL
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, texture->rawwidth);
+#endif
 
 		// unmap the buffer from the CPU space so it can DMA
 		pfn_glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER_ARB);
 
 		// kick off the DMA
 		glTexSubImage2D(texture->texTarget, 0, 0, 0, texture->rawwidth, texture->rawheight,
-					GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL);
+					DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, NULL);
 	}
 	else
 	{
 		glBindTexture(texture->texTarget, texture->texture);
 
+#ifndef USE_WEBGL
 		// give the card a hint
 		if (texture->nocopy)
 			glPixelStorei(GL_UNPACK_ROW_LENGTH, texture->texinfo.rowpixels);
 		else
 			glPixelStorei(GL_UNPACK_ROW_LENGTH, texture->rawwidth);
+#endif
 
 		// and upload the image
 		glTexSubImage2D(texture->texTarget, 0, 0, 0, texture->rawwidth, texture->rawheight,
-						GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, texture->data);
+						DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, texture->data);
 	}
 }
 
