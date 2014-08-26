@@ -688,6 +688,7 @@ static void extract_video_config(running_machine &machine)
 		video_config.vbo         = options.gl_vbo();
 		video_config.pbo         = options.gl_pbo();
 		video_config.glsl        = options.gl_glsl();
+		video_config.es2         = options.gl_es2();
 		if ( video_config.glsl )
 		{
 			int i;

@@ -27,20 +27,33 @@ static const char * glsl_mamebm_fsh_files [GLSL_SHADER_FEAT_INT_NUMBER] =
 
 #else // GLSL_SOURCE_ON_DISK
 
+#ifdef USE_WEBGL
+#include "shader/glsl_es2.vsh.c"
+#include "shader/glsl_es2.fsh.c"
+#else
 #include "shader/glsl_general.vsh.c"
 
 #include "shader/glsl_plain_rgb32_dir.fsh.c"
 #include "shader/glsl_bilinear_rgb32_dir.fsh.c"
+#endif
 
 static const char * glsl_mamebm_vsh_sources [GLSL_VERTEX_SHADER_INT_NUMBER] =
 {
+#ifdef USE_WEBGL
+  glsl_es2_vsh_src
+#else
 	glsl_general_vsh_src                                    // general
+#endif
 };
 
 static const char * glsl_mamebm_fsh_sources [GLSL_SHADER_FEAT_INT_NUMBER] =
 {
+#ifdef USE_WEBGL
+  glsl_es2_fsh_src
+#else
 	glsl_plain_rgb32_dir_fsh_src,                              // rgb32 dir plain
 	glsl_bilinear_rgb32_dir_fsh_src                         // rgb32 dir bilinear
+#endif
 };
 
 #endif // GLSL_SOURCE_ON_DISK

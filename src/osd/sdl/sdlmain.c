@@ -124,6 +124,7 @@ const options_entry sdl_options::s_option_entries[] =
 	{ SDLOPTION_GL_VBO,                       "1",    OPTION_BOOLEAN, "enable OpenGL VBO,  if available (default on)" },
 	{ SDLOPTION_GL_PBO,                       "1",    OPTION_BOOLEAN, "enable OpenGL PBO,  if available (default on)" },
 	{ SDLOPTION_GL_GLSL,                      "0",    OPTION_BOOLEAN, "enable OpenGL GLSL, if available (default off)" },
+	{ SDLOPTION_GL_ES2,                       "0",    OPTION_BOOLEAN, "use OpenGL ES2, if available (default off)" },
 	{ SDLOPTION_GLSL_FILTER,                  "1",    OPTION_STRING,  "enable OpenGL GLSL filtering instead of FF filtering 0-plain, 1-bilinear (default)" },
 	{ SDLOPTION_SHADER_MAME "0",     SDLOPTVAL_NONE,  OPTION_STRING,  "custom OpenGL GLSL shader set mame bitmap 0" },
 	{ SDLOPTION_SHADER_MAME "1",     SDLOPTVAL_NONE,  OPTION_STRING,  "custom OpenGL GLSL shader set mame bitmap 1" },

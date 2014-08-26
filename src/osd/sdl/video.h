@@ -111,6 +111,7 @@ struct sdl_video_config
 	int                 filter;         // enable filtering, disabled if glsl_filter>0
 	int                 prefer16bpp_tex;
 	int                 glsl;
+	int                 es2;
 	int                 glsl_filter;        // glsl filtering, >0 disables filter
 	char *              glsl_shader_mamebm[GLSL_SHADER_MAX]; // custom glsl shader set, mame bitmap
 	int                 glsl_shader_mamebm_num; // custom glsl shader set number, mame bitmap

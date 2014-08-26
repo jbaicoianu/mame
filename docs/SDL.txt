@@ -192,6 +192,7 @@ Video OpenGL-specific options
 	devs, but normally they should be left at their defaults which results
 	in the best possible video performance.
 
+-gl_es2              Enable OpenGL ES2, if available (default off)
 -gl_glsl             Enable OpenGL GLSL, if available (default off)
 -gl_glsl_filter      Enable OpenGL GLSL filtering instead of FF filtering 0-plain,
                      1-bilinear (default)

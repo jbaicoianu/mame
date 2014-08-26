@@ -68,6 +68,7 @@
 #define SDLOPTION_SHADER_SCREEN         "glsl_shader_screen"
 #define SDLOPTION_GLSL_FILTER           "gl_glsl_filter"
 #define SDLOPTION_GL_GLSL               "gl_glsl"
+#define SDLOPTION_GL_ES2                "gl_es2"
 #define SDLOPTION_GL_PBO                "gl_pbo"
 #define SDLOPTION_GL_VBO                "gl_vbo"
 #define SDLOPTION_GL_NOTEXTURERECT      "gl_notexturerect"
@@ -142,6 +143,7 @@ public:
 	bool gl_vbo() const { return bool_value(SDLOPTION_GL_VBO); }
 	bool gl_pbo() const { return bool_value(SDLOPTION_GL_PBO); }
 	bool gl_glsl() const { return bool_value(SDLOPTION_GL_GLSL); }
+	bool gl_es2() const { return bool_value(SDLOPTION_GL_ES2); }
 	bool glsl_filter() const { return bool_value(SDLOPTION_GLSL_FILTER); }
 	const char *shader_mame(int index) const { astring temp; return value(temp.format("%s%d", SDLOPTION_SHADER_MAME, index)); }
 	const char *shader_screen(int index) const { astring temp; return value(temp.format("%s%d", SDLOPTION_SHADER_SCREEN, index)); }

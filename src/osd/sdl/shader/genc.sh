@@ -44,3 +44,16 @@ echo "const char glsl_bilinear_rgb32_dir_fsh_src[] =" > glsl_bilinear_rgb32_dir.
 sed -e 's/^/"/g' -e 's/$/\\n"/g' glsl_bilinear_rgb32_dir.fsh >>  glsl_bilinear_rgb32_dir.fsh.c
 echo ";" >> glsl_bilinear_rgb32_dir.fsh.c
 
+##
+## GLSL ES2
+##
+
+echo "const char glsl_es2_vsh_src[] =" > glsl_es2.vsh.c
+sed -e 's/^/"/g' -e 's/$/\\n"/g' glsl_es2.vsh >> glsl_es2.vsh.c
+echo ";" >> glsl_es2.vsh.c
+
+echo "const char glsl_es2_fsh_src[] =" > glsl_es2.fsh.c
+sed -e 's/^/"/g' -e 's/$/\\n"/g' glsl_es2.fsh >>  glsl_es2.fsh.c
+echo ";" >> glsl_es2.fsh.c
+
+

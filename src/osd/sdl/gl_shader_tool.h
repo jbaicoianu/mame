@@ -189,6 +189,7 @@ extern PFNGLUNIFORM1IVARBPROC pfn_glUniform1ivARB;
 extern PFNGLUNIFORM2IVARBPROC pfn_glUniform2ivARB;
 extern PFNGLUNIFORM3IVARBPROC pfn_glUniform3ivARB;
 extern PFNGLUNIFORM4IVARBPROC pfn_glUniform4ivARB;
+extern PFNGLUNIFORMMATRIX4FVARBPROC pfn_glUniformMatrix4fvARB;
 
 
 #ifdef __cplusplus

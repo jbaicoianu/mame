@@ -52,6 +52,7 @@ PFNGLUNIFORM1IVARBPROC pfn_glUniform1ivARB=NULL;
 PFNGLUNIFORM2IVARBPROC pfn_glUniform2ivARB=NULL;
 PFNGLUNIFORM3IVARBPROC pfn_glUniform3ivARB=NULL;
 PFNGLUNIFORM4IVARBPROC pfn_glUniform4ivARB=NULL;
+PFNGLUNIFORMMATRIX4FVARBPROC pfn_glUniformMatrix4fvARB=NULL;
 
 
 int gl_shader_loadExtention(PFNGLGETPROCADDRESSOS GetProcAddress)
@@ -78,6 +79,7 @@ int gl_shader_loadExtention(PFNGLGETPROCADDRESSOS GetProcAddress)
 	pfn_glUniform2ivARB           = (PFNGLUNIFORM2IVARBPROC) GetProcAddress ("glUniform2ivARB");
 	pfn_glUniform3ivARB           = (PFNGLUNIFORM3IVARBPROC) GetProcAddress ("glUniform3ivARB");
 	pfn_glUniform4ivARB           = (PFNGLUNIFORM4IVARBPROC) GetProcAddress ("glUniform4ivARB");
+	pfn_glUniformMatrix4fvARB     = (PFNGLUNIFORMMATRIX4FVARBPROC) GetProcAddress ("glUniformMatrix4fvARB");
 
 	if ( pfn_glGetObjectParameterivARB && pfn_glGetInfoLogARB && pfn_glDeleteObjectARB && pfn_glCreateShaderObjectARB &&
 			pfn_glShaderSourceARB && pfn_glCompileShaderARB && pfn_glCreateProgramObjectARB && pfn_glAttachObjectARB &&
@@ -113,6 +115,7 @@ int gl_shader_loadExtention(PFNGLGETPROCADDRESSOS GetProcAddress)
 	if (!pfn_glUniform2ivARB) osd_printf_error("glUniform2ivARB");
 	if (!pfn_glUniform3ivARB) osd_printf_error("glUniform3ivARB");
 	if (!pfn_glUniform4ivARB) osd_printf_error("glUniform4ivARB");
+	if (!pfn_glUniformMatrix4fvARB) osd_printf_error("glUniformMatrix4fvARB, ");
 	osd_printf_error("\n");
 
 	return -1;
@@ -156,7 +159,7 @@ int gl_shader_check_error(GLhandleARB obj, GLenum obj_query, GLSLCheckMode m, co
 		return -1;
 	}
 
-	pfn_glGetObjectParameterivARB(obj, obj_query, &param);
+	//pfn_glGetObjectParameterivARB(obj, obj_query, &param);
 
 	switch(obj_query)
 	{
@@ -252,7 +255,8 @@ int gl_texture_check_size(GLenum target, GLint level, GLint internalFormat, GLsi
 				int verbose)
 {
 	int err=1;
-	GLenum texTargetProxy = (target==GL_TEXTURE_RECTANGLE_ARB)?GL_PROXY_TEXTURE_RECTANGLE_ARB:GL_PROXY_TEXTURE_2D;
+	//GLenum texTargetProxy = (target==GL_TEXTURE_RECTANGLE_ARB)?GL_PROXY_TEXTURE_RECTANGLE_ARB:GL_PROXY_TEXTURE_2D;
+	GLenum texTargetProxy = GL_TEXTURE_2D;
 
 	if ( !avail_width || !avail_height)
 	return -1;
@@ -265,44 +269,52 @@ int gl_texture_check_size(GLenum target, GLint level, GLint internalFormat, GLsi
 	/* Test the max texture size */
 	while(err && width>=1 && height>=1 /* && width>=64 && height>=64 */)
 	{
-	glTexImage2D (texTargetProxy, level,
-			internalFormat,
-			width, height,
-			border, format, type, NULL);
-	if ( 0!=(err=GL_CHECK_ERROR_NORMAL() )) return err;
+    UINT32 *dummy = (UINT32 *) malloc(width * height * sizeof(UINT32));
+    memset(dummy, 0, width * height * sizeof(UINT32));
+		glTexImage2D (texTargetProxy, level,
+				internalFormat,
+				width, height,
+				border, format, type, dummy);
+    free(dummy);
+		if ( 0!=(err=GL_CHECK_ERROR_NORMAL() )) return err;
+	
+#ifdef USE_WEBGL
+ 	 *avail_width = width;
+ 	 *avail_height = height;
+#else
+		glGetTexLevelParameteriv( texTargetProxy, level, GL_TEXTURE_WIDTH,  avail_width);
+		glGetTexLevelParameteriv( texTargetProxy, level, GL_TEXTURE_HEIGHT, avail_height);
+#endif
+		if ( 0!=(err=GL_CHECK_ERROR_NORMAL() )) return err;
 
-	glGetTexLevelParameteriv( texTargetProxy, level, GL_TEXTURE_WIDTH,  avail_width);
-	glGetTexLevelParameteriv( texTargetProxy, level, GL_TEXTURE_HEIGHT, avail_height);
-	if ( 0!=(err=GL_CHECK_ERROR_NORMAL() )) return err;
-
-	if ( (*avail_width) != width || (*avail_height) != height )
-	{
-		err=1;
-
-		if(verbose)
+		if ( (*avail_width) != width || (*avail_height) != height )
 		{
-			osd_printf_warning("gl_texture_size_check: "
-				"TexImage2D(0x%X, %d, 0x%X, %d, %d, %d, 0x%X, 0x%X): returned size does not match: %dx%d\n",
-				(unsigned int)target, (int)level, (int)internalFormat,
-				(int)width, (int)height, (int)border, (unsigned int)format, (unsigned int)type,
-								(int)*avail_width, (int)*avail_height);
-		}
+			err=1;
 
-		if ( (*avail_width)  == width   )
-			height /= 2;
-		else if ( (*avail_height) == height )
-			width /= 2;
-		else if (width > height)
-				width /= 2;
-		else
+			if(verbose)
+			{
+				osd_printf_warning("gl_texture_size_check: "
+					"TexImage2D(0x%X, %d, 0x%X, %d, %d, %d, 0x%X, 0x%X): returned size does not match: %dx%d\n",
+					(unsigned int)target, (int)level, (int)internalFormat,
+					(int)width, (int)height, (int)border, (unsigned int)format, (unsigned int)type,
+									(int)*avail_width, (int)*avail_height);
+			}
+
+			if ( (*avail_width)  == width   )
 				height /= 2;
-		if(verbose)
-		{
-			fprintf (stderr, "gl_texture_size_check: trying [%dx%d] !\n", (int)height, (int)width);
+			else if ( (*avail_height) == height )
+				width /= 2;
+			else if (width > height)
+					width /= 2;
+			else
+					height /= 2;
+			if(verbose)
+			{
+				fprintf (stderr, "gl_texture_size_check: trying [%dx%d] !\n", (int)height, (int)width);
+			}
+		} else {
+			err=0;
 		}
-	} else {
-		err=0;
-	}
 	}
 	if(!err)
 	{

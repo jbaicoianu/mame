@@ -52,8 +52,7 @@ NO_USE_XINPUT = 1
 # GL-dispatching.
 # This option takes precedence over MESA_INSTALL_ROOT
 
-USE_DISPATCH_GL = 1
-
+USE_DISPATCH_GL = 0
 USE_WEBGL = 1
 
 # The following settings are currently supported for unix only.

@@ -125,6 +125,13 @@ typedef void (APIENTRYP PFNGLDELETERENDERBUFFERSEXTPROC) (GLsizei n, const GLuin
 #define DRAWOGL_TEXTURE_FORMAT GL_RGBA
 #define DRAWOGL_TEXTURE_TYPE GL_UNSIGNED_BYTE
 #define DRAWOGL_TEXTURE_CLAMP GL_CLAMP_TO_EDGE
+
+GLfloat viewMatrix[16] = {
+	1, 0, 0, 0,
+	0, 1, 0, 0,
+	0, 0, 1, 0,
+	0, 0, 0, 1
+};
 #else
 #define DRAWOGL_TEXTURE_INTERNALFORMAT GL_RGBA8
 #define DRAWOGL_TEXTURE_FORMAT GL_BGRA
@@ -234,6 +241,7 @@ struct sdl_info
 	int             usepbo;         // runtime check if PBO is available
 	int             usefbo;         // runtime check if FBO is available
 	int             useglsl;        // runtime check if GLSL is available
+	int             usegles2;       // runtime check if GL ES2.0 is being used
 
 	glsl_shader_info *glsl;             // glsl_shader_info
 
@@ -256,6 +264,7 @@ struct sdl_info
 	INT32           surf_w;
 	INT32           surf_h;
 	GLfloat         texVerticex[8];
+	GLuint          texVerticexBufferName;
 };
 
 /* line_aa_step is used for drawing antialiased lines */
@@ -628,6 +637,9 @@ static int drawogl_window_create(sdl_window_info *window, int width, int height)
 	sdl->usepbo = 0;
 	sdl->usefbo = 0;
 	sdl->useglsl = 0;
+	sdl->usegles2 = video_config.es2;
+
+	osd_printf_verbose("OpenGL Extensions: %s\n", extstr);
 
 	if ( video_config.allowtexturerect &&
 			( strstr(extstr, "GL_ARB_texture_rectangle") ||  strstr(extstr, "GL_EXT_texture_rectangle") )
@@ -669,7 +681,7 @@ static int drawogl_window_create(sdl_window_info *window, int width, int height)
 		}
 	}
 
-	if (strstr(extstr, "GL_ARB_vertex_buffer_object"))
+	if (sdl->usegles2 || strstr(extstr, "GL_ARB_vertex_buffer_object"))
 	{
 		sdl->usevbo = video_config.vbo;
 		if (!shown_video_info)
@@ -708,7 +720,7 @@ static int drawogl_window_create(sdl_window_info *window, int width, int height)
 		}
 	}
 
-	if (strstr(extstr, "GL_EXT_framebuffer_object"))
+	if (sdl->usegles2 || strstr(extstr, "GL_EXT_framebuffer_object"))
 	{
 		sdl->usefbo = 1;
 		if (!shown_video_info)
@@ -720,11 +732,11 @@ static int drawogl_window_create(sdl_window_info *window, int width, int height)
 		}
 	}
 
-	if (strstr(extstr, "GL_ARB_shader_objects") &&
+	if (sdl->usegles2 || (strstr(extstr, "GL_ARB_shader_objects") &&
 		strstr(extstr, "GL_ARB_shading_language_100") &&
 		strstr(extstr, "GL_ARB_vertex_shader") &&
 		strstr(extstr, "GL_ARB_fragment_shader")
-		)
+		))
 	{
 		sdl->useglsl = video_config.glsl;
 		if (!shown_video_info)
@@ -1253,7 +1265,10 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 
 		// set lines and points just barely above normal size to get proper results
 		glLineWidth(video_config.beamwidth);
+#ifndef USE_WEBGL
+		// FIXME - GL ES 2.0 requires gl_PointSize to be set in the vertex shader, so we should set up a uniform
 		glPointSize(video_config.beamwidth);
+#endif
 
 		// set up a nice simple 2D coordinate system, so GL behaves exactly how we'd like.
 		//
@@ -1266,16 +1281,57 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 		// (0,h)     (w,h)
 
 		glViewport(0.0, 0.0, (GLsizei)window->width, (GLsizei)window->height);
-		glMatrixMode(GL_PROJECTION);
-		glLoadIdentity();
-		glOrtho(0.0, (GLdouble)window->width, (GLdouble)window->height, 0.0, 0.0, -1.0);
-		glMatrixMode(GL_MODELVIEW);
-		glLoadIdentity();
+		if ( sdl->usegles2 ) {
+			float left = 0, right = window->width,
+						top = 0, bottom = window->height,
+						near = 10, far = -10;
+
+			viewMatrix[0] = 2 / (right - left);
+			viewMatrix[5] = 2 / (top - bottom);
+			viewMatrix[10] = -2 / (far - near);
+			viewMatrix[12] = -(right + left) / (right - left);
+			viewMatrix[13] = -(top + bottom) / (top - bottom);
+			viewMatrix[14] = -(far + near) / (far - near);
+		} else {
+			glMatrixMode(GL_PROJECTION);
+			glLoadIdentity();
+			glOrtho(0.0, (GLdouble)window->width, (GLdouble)window->height, 0.0, 0.0, -1.0);
+			glMatrixMode(GL_MODELVIEW);
+			glLoadIdentity();
+		}
 
 		if ( ! sdl->initialized )
 		{
+#ifndef USE_WEBGL
 			glEnableClientState(GL_VERTEX_ARRAY);
 			glVertexPointer(2, GL_FLOAT, 0, sdl->texVerticex); // no VBO, since it's too volatile
+#else
+			sdl->texVerticex[0]=0.0;
+			sdl->texVerticex[1]=0.0;
+			sdl->texVerticex[2]=0.0;
+			sdl->texVerticex[3]=1.0;
+			sdl->texVerticex[4]=1.0;
+			sdl->texVerticex[5]=1.0;
+			sdl->texVerticex[6]=1.0;
+			sdl->texVerticex[7]=0.0;
+
+			unsigned char indices[2][3] = {
+				{0, 2, 1},
+				{0, 2, 3},
+			};
+
+			glGenBuffers(1, &sdl->texVerticexBufferName);
+			glBindBuffer(GL_ARRAY_BUFFER, sdl->texVerticexBufferName);
+			glBufferData(GL_ARRAY_BUFFER, 4*2*sizeof(GLfloat), sdl->texVerticex, GL_STATIC_DRAW );
+
+			GLuint indexBuffer;
+			glGenBuffers(1, &indexBuffer);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * 3, indices, GL_STATIC_DRAW);
+
+			glEnableVertexAttribArray(0);
+			glEnableVertexAttribArray(1);
+#endif
 
 			sdl->initialized = 1;
 		}
@@ -1313,11 +1369,12 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 	sdl->last_vofs = vofs;
 
 	window->primlist->acquire_lock();
+	int numprims = 0, numlines = 0, numquads = 0;
 
 	// now draw
 	for (prim = window->primlist->first(); prim != NULL; prim = prim->next())
 	{
-		int i;
+		numprims++;
 
 		switch (prim->type)
 		{
@@ -1326,6 +1383,8 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 			 * since entering and leaving one is most expensive..
 			 */
 			case render_primitive::LINE:
+				numlines++;
+/*
 				#if !USE_WIN32_STYLE_LINES
 				// check if it's really a point
 				if (((prim->bounds.x1 - prim->bounds.x0) == 0) && ((prim->bounds.y1 - prim->bounds.y0) == 0))
@@ -1341,7 +1400,7 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 					pendingPrimitive=GL_NO_PRIMITIVE;
 				}
 
-						if ( pendingPrimitive==GL_NO_PRIMITIVE )
+				if ( pendingPrimitive==GL_NO_PRIMITIVE )
 				{
 							set_blendmode(sdl, PRIMFLAG_GET_BLENDMODE(prim->flags));
 				}
@@ -1452,9 +1511,28 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 				}
 				#endif
 				break;
+*/
 
 			case render_primitive::QUAD:
+				numquads++;
 
+#ifdef USE_WEBGL
+				glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
+				glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+				/*
+				glEnableVertexAttribArray(0);
+				glEnableVertexAttribArray(1);
+				*/
+
+				set_blendmode(sdl, PRIMFLAG_GET_BLENDMODE(prim->flags));
+				texture = texture_update(window, prim, 0);
+
+				if ( texture && texture->type==TEXTURE_TYPE_SHADER ) {
+					//glDrawArrays(GL_TRIANGLES, 0, 6);
+				}
+				glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, 0);
+#else
 				if(pendingPrimitive!=GL_NO_PRIMITIVE)
 				{
 					glEnd();
@@ -1498,7 +1576,7 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 						{
 							texture = texture_update(window, prim, i);
 						}
-						glDrawArrays(GL_QUADS, 0, 4);
+						glDrawArrays(GL_TRIANGLES, 0, 4);
 					}
 				} else {
 					sdl->texVerticex[0]=prim->bounds.x0 + hofs;
@@ -1510,8 +1588,9 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 					sdl->texVerticex[6]=prim->bounds.x0 + hofs;
 					sdl->texVerticex[7]=prim->bounds.y1 + vofs;
 
-					glDrawArrays(GL_QUADS, 0, 4);
+					glDrawArrays(GL_TRIANGLES, 0, 4);
 				}
+#endif
 
 				if ( texture )
 				{
@@ -1524,6 +1603,7 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 				throw emu_fatalerror("Unexpected render_primitive type");
 		}
 	}
+	osd_printf_warning("SDL: rendered %d primitives (%d lines, %d quads)\n", numprims, numlines, numquads);
 
 	if(pendingPrimitive!=GL_NO_PRIMITIVE)
 	{
@@ -1871,6 +1951,7 @@ static int texture_fbo_create(UINT32 text_unit, UINT32 text_name, UINT32 fbo_nam
 {
 	pfn_glActiveTexture(text_unit);
 	pfn_glBindFramebuffer(GL_FRAMEBUFFER_EXT, fbo_name);
+	osd_printf_warning("Create FBO texture: %d\n", fbo_name);
 	glBindTexture(GL_TEXTURE_2D, text_name);
 	{
 		GLint _width, _height;
@@ -2012,6 +2093,21 @@ static int texture_shader_create(sdl_window_info *window,
 		uniform_location = pfn_glGetUniformLocationARB(sdl->glsl_program[i], "screen_texture_pow2_sz");
 		pfn_glUniform2fvARB(uniform_location, 1, &(screen_texture_pow2_sz[0]));
 		GL_CHECK_ERROR_NORMAL();
+
+		if ( sdl->usegles2 ) {
+
+			char tmpbuf[256];
+			sprintf(tmpbuf, "[ [ %.4f, %.4f, %.4f, %.4f ],\n  [ %.4f, %.4f, %.4f, %.4f ],\n  [ %.4f, %.4f, %.4f, %.4f ],\n  [ %.4f, %.4f, %.4f, %.4f ] ]\n",
+				viewMatrix[0], viewMatrix[1], viewMatrix[2], viewMatrix[3], 
+				viewMatrix[4], viewMatrix[5], viewMatrix[6], viewMatrix[7], 
+				viewMatrix[8], viewMatrix[9], viewMatrix[10], viewMatrix[11], 
+				viewMatrix[12], viewMatrix[13], viewMatrix[14], viewMatrix[15]
+			);
+			osd_printf_warning("Set projection matrix:\n%s", tmpbuf);
+			uniform_location = pfn_glGetUniformLocationARB(sdl->glsl_program[i], "viewMatrix");
+			pfn_glUniformMatrix4fvARB(uniform_location, 1, GL_FALSE, (const GLfloat *) viewMatrix);
+			GL_CHECK_ERROR_NORMAL();
+		}
 	}
 
 	pfn_glUseProgramObjectARB(sdl->glsl_program[0]); // start with 1st shader
@@ -2200,7 +2296,7 @@ static texture_info *texture_create(sdl_window_info *window, const render_texinf
 
 	if ( texture->type != TEXTURE_TYPE_SHADER && sdl->useglsl)
 	{
-		pfn_glUseProgramObjectARB(0); // back to fixed function pipeline
+		//pfn_glUseProgramObjectARB(0); // back to fixed function pipeline
 	}
 
 	if ( texture->type==TEXTURE_TYPE_SHADER )
@@ -2216,7 +2312,7 @@ static texture_info *texture_create(sdl_window_info *window, const render_texinf
 		// get a name for this texture
 		glGenTextures(1, (GLuint *)&texture->texture);
 
-		glEnable(texture->texTarget);
+		//glEnable(texture->texTarget);
 
 		// make sure we're operating on *this* texture
 		glBindTexture(texture->texTarget, texture->texture);
@@ -2303,7 +2399,11 @@ static texture_info *texture_create(sdl_window_info *window, const render_texinf
 		pfn_glBindBuffer( GL_ARRAY_BUFFER_ARB, texture->texCoordBufferName );
 		// Load The Data
 		pfn_glBufferData( GL_ARRAY_BUFFER_ARB, 4*2*sizeof(GLfloat), texture->texCoord, GL_STREAM_DRAW );
+#ifndef USE_WEBGL
 		glTexCoordPointer( 2, GL_FLOAT, 0, (char *) NULL ); // we are using ARB VBO buffers
+#else
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
+#endif
 	}
 	else
 	{
@@ -2587,6 +2687,7 @@ INLINE void copyline_yuy16_to_argb(UINT32 *dst, const UINT16 *src, int width, co
 
 static void texture_set_data(texture_info *texture, const render_texinfo *texsource, UINT32 flags)
 {
+
 	if ( texture->type == TEXTURE_TYPE_DYNAMIC )
 	{
 		assert(texture->pbo);
@@ -2671,11 +2772,18 @@ static void texture_set_data(texture_info *texture, const render_texinfo *texsou
 			glPixelStorei(GL_UNPACK_ROW_LENGTH, texture->texinfo.rowpixels);
 		else
 			glPixelStorei(GL_UNPACK_ROW_LENGTH, texture->rawwidth);
-#endif
 
-		// and upload the image
 		glTexSubImage2D(texture->texTarget, 0, 0, 0, texture->rawwidth, texture->rawheight,
 				DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, texture->data);
+#else
+		glTexImage2D(texture->texTarget, 0, DRAWOGL_TEXTURE_INTERNALFORMAT, texture->rawwidth, texture->rawheight, 0,
+				DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, texture->data);
+		//glTexSubImage2D(texture->texTarget, 0, 0, 0, texture->rawwidth, texture->rawheight,
+		//		DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, texture->data);
+#endif
+
+		//osd_printf_warning("upload image shader (%dx%d) - %d != %d!\n", texture->rawwidth, texture->rawheight, imagecrc, newcrc);
+		// and upload the image
 	}
 	else if ( texture->type == TEXTURE_TYPE_DYNAMIC )
 	{
@@ -2688,9 +2796,10 @@ static void texture_set_data(texture_info *texture, const render_texinfo *texsou
 		// unmap the buffer from the CPU space so it can DMA
 		pfn_glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER_ARB);
 
+		osd_printf_warning("upload image dynamic (%dx%d)!\n", texture->rawwidth, texture->rawheight);
 		// kick off the DMA
 		glTexSubImage2D(texture->texTarget, 0, 0, 0, texture->rawwidth, texture->rawheight,
-					DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, NULL);
+		DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, NULL);
 	}
 	else
 	{
@@ -2702,11 +2811,15 @@ static void texture_set_data(texture_info *texture, const render_texinfo *texsou
 			glPixelStorei(GL_UNPACK_ROW_LENGTH, texture->texinfo.rowpixels);
 		else
 			glPixelStorei(GL_UNPACK_ROW_LENGTH, texture->rawwidth);
-#endif
-
 		// and upload the image
 		glTexSubImage2D(texture->texTarget, 0, 0, 0, texture->rawwidth, texture->rawheight,
-						DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, texture->data);
+				DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, texture->data);
+#else
+		glTexImage2D(texture->texTarget, 0, DRAWOGL_TEXTURE_INTERNALFORMAT, texture->rawwidth, texture->rawheight, 0,
+				DRAWOGL_TEXTURE_FORMAT, DRAWOGL_TEXTURE_TYPE, texture->data);
+#endif
+
+		osd_printf_warning("upload image static (%dx%d)!\n", texture->rawwidth, texture->rawheight);
 	}
 }
 
@@ -2759,6 +2872,8 @@ static void texture_coord_update(sdl_window_info *window,
 	float ustart = 0.0f, ustop = 0.0f;            // beginning/ending U coordinates
 	float vstart = 0.0f, vstop = 0.0f;            // beginning/ending V coordinates
 	float du, dv;
+	bool changed = false;
+	GLfloat previousCoord[8];
 
 	if ( texture->type != TEXTURE_TYPE_SHADER ||
 			( texture->type == TEXTURE_TYPE_SHADER && shaderIdx<=sdl->glsl_program_mb2sc ) )
@@ -2772,11 +2887,13 @@ static void texture_coord_update(sdl_window_info *window,
 			ustop = (float)(prim->texture.width + 1) / (float)(unscaledwidth);
 			vstart = 1.0f / (float)(unscaledheight);
 			vstop = (float)(prim->texture.height + 1) / (float)(unscaledheight);
+	osd_printf_warning("texture_coord_update: borderpix: [%.4f, %.4f], [%.4f, %.4f]\n", ustart, ustop, vstart, vstop);
 		}
 		else
 		{
 			ustop  = (float)(prim->texture.width*texture->xprescale) / (float)texture->rawwidth_create;
 			vstop  = (float)(prim->texture.height*texture->yprescale) / (float)texture->rawheight_create;
+	//osd_printf_warning("texture_coord_update: NO borderpix: (%dx%d) - (%dx%d) (%.4fx%.4f)=> [%.4f, %.4f], [%.4f, %.4f]\n", prim->texture.width, prim->texture.height, texture->rawwidth_create, texture->rawheight_create, texture->xprescale, texture->yprescale, ustart, ustop, vstart, vstop);
 		}
 	}
 	else if ( texture->type == TEXTURE_TYPE_SHADER && shaderIdx>sdl->glsl_program_mb2sc )
@@ -2786,6 +2903,7 @@ static void texture_coord_update(sdl_window_info *window,
 
 		ustop  = (float)(window->width) / (float)surf_w_pow2;
 		vstop  = (float)(window->height) / (float)surf_h_pow2;
+	osd_printf_warning("texture_coord_update: shader mb2sc: [%.4f, %.4f], [%.4f, %.4f]\n", ustart, ustop, vstart, vstop);
 	}
 	else
 	{
@@ -2795,12 +2913,18 @@ static void texture_coord_update(sdl_window_info *window,
 	du = ustop - ustart;
 	dv = vstop - vstart;
 
+	du = dv = 1.0;
+
 	if ( texture->texTarget == GL_TEXTURE_RECTANGLE_ARB )
 	{
 		// texture coordinates for TEXTURE_RECTANGLE are 0,0 -> w,h
 		// rather than 0,0 -> 1,1 as with normal OpenGL texturing
 		du *= (float)texture->rawwidth;
 		dv *= (float)texture->rawheight;
+	}
+
+	for (int i = 0; i < 8; i++) {
+	previousCoord[i] = texture->texCoord[i];
 	}
 
 	if ( texture->type == TEXTURE_TYPE_SHADER && shaderIdx!=sdl->glsl_program_mb2sc )
@@ -2827,6 +2951,40 @@ static void texture_coord_update(sdl_window_info *window,
 		texture->texCoord[5]=vstart + dv * prim->texcoords.br.v;
 		texture->texCoord[6]=ustart + du * prim->texcoords.bl.u;
 		texture->texCoord[7]=vstart + dv * prim->texcoords.bl.v;
+	}
+
+	for (int i = 0; i < 8; i++) {
+		if (previousCoord[i] != texture->texCoord[i]) {
+			changed = true;
+			break;
+		}
+	}
+
+	if (changed) {
+#ifndef USE_WEBGL
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+#endif
+		char tmpbuf[256];
+		sprintf(tmpbuf, "[%.4f, %.4f], [%.4f, %.4f], [%.4f, %.4f], [%.4f, %.4f]\n",
+				texture->texCoord[0], texture->texCoord[1],
+				texture->texCoord[2], texture->texCoord[3],
+				texture->texCoord[4], texture->texCoord[5],
+				texture->texCoord[6], texture->texCoord[7]
+		);
+		osd_printf_warning("Set texture coordinates: %s\n", tmpbuf);
+		
+		if(sdl->usevbo)
+		{
+			pfn_glBindBuffer( GL_ARRAY_BUFFER_ARB, texture->texCoordBufferName );
+			// Load The Data
+			pfn_glBufferSubData( GL_ARRAY_BUFFER_ARB, 0, 4*2*sizeof(GLfloat), texture->texCoord );
+			//pfn_glBufferData( GL_ARRAY_BUFFER_ARB, 4*2*sizeof(GLfloat), texture->texCoord, GL_DYNAMIC_DRAW );
+			//glTexCoordPointer( 2, GL_FLOAT, 0, (char *) NULL ); // we are using ARB VBO buffers
+		}
+		else
+		{
+			glTexCoordPointer(2, GL_FLOAT, 0, texture->texCoord);
+		}
 	}
 }
 
@@ -2871,6 +3029,7 @@ static void texture_mpass_flip(sdl_info *sdl, texture_info *texture, int shaderI
 			pfn_glBindFramebuffer(GL_FRAMEBUFFER_EXT, texture->mpass_fbo_mamebm[texture->mpass_dest_idx]);
 		}
 
+#ifndef USE_WEBGL
 		if ( shaderIdx==0 )
 		{
 			glPushAttrib(GL_VIEWPORT_BIT);
@@ -2883,6 +3042,7 @@ static void texture_mpass_flip(sdl_info *sdl, texture_info *texture, int shaderI
 			glPopAttrib(); // glViewport(0.0, 0.0, (GLsizei)window->width, (GLsizei)window->height)
 			GL_CHECK_ERROR_NORMAL();
 		}
+#endif
 		glClear(GL_COLOR_BUFFER_BIT); // make sure the whole texture is redrawn ..
 	}
 	else
@@ -2890,11 +3050,13 @@ static void texture_mpass_flip(sdl_info *sdl, texture_info *texture, int shaderI
 		glBindTexture(texture->texTarget, 0);
 		pfn_glBindFramebuffer(GL_FRAMEBUFFER_EXT, 0);
 
+#ifndef USE_WEBGL
 		if ( sdl->glsl_program_mb2sc == sdl->glsl_program_num-1 )
 		{
 			glPopAttrib(); // glViewport(0.0, 0.0, (GLsizei)window->width, (GLsizei)window->height)
 			GL_CHECK_ERROR_NORMAL();
 		}
+#endif
 
 		pfn_glActiveTexture(GL_TEXTURE0);
 		glBindTexture(texture->texTarget, 0);
@@ -2946,6 +3108,7 @@ static void texture_shader_update(sdl_window_info *window, texture_info *texture
 	{
 		osd_printf_verbose("GLSL: could not get render container for screen %d\n", window->start_viewscreen);
 	}
+
 }
 
 static texture_info * texture_update(sdl_window_info *window, const render_primitive *prim, int shaderIdx)
@@ -2969,11 +3132,11 @@ static texture_info * texture_update(sdl_window_info *window, const render_primi
 		{
 			assert ( sdl->usepbo ) ;
 			pfn_glBindBuffer( GL_PIXEL_UNPACK_BUFFER_ARB, texture->pbo);
-			glEnable(texture->texTarget);
+			//glEnable(texture->texTarget);
 		}
 		else
 		{
-			glEnable(texture->texTarget);
+			//glEnable(texture->texTarget);
 		}
 	}
 
@@ -2982,6 +3145,18 @@ static texture_info * texture_update(sdl_window_info *window, const render_primi
 		if ( texture->type == TEXTURE_TYPE_SHADER )
 		{
 			texture_shader_update(window, texture, shaderIdx);
+
+			int uniform_location;
+			float hofs = sdl->last_hofs, vofs = sdl->last_vofs;
+
+			uniform_location = pfn_glGetUniformLocationARB(sdl->glsl_program[shaderIdx], "offset");
+			glUniform2f(uniform_location, prim->bounds.x0 + hofs, prim->bounds.y0 + vofs);
+
+			uniform_location = pfn_glGetUniformLocationARB(sdl->glsl_program[shaderIdx], "size");
+			glUniform2f(uniform_location, prim->bounds.x1 - prim->bounds.x0, prim->bounds.y1 - prim->bounds.y0);
+
+			GL_CHECK_ERROR_NORMAL();
+
 			if ( sdl->glsl_program_num>1 )
 			{
 				texture_mpass_flip(sdl, texture, shaderIdx);
@@ -3004,22 +3179,9 @@ static texture_info * texture_update(sdl_window_info *window, const render_primi
 			glBindTexture(texture->texTarget, texture->texture);
 		}
 		texture_coord_update(window, texture, prim, shaderIdx);
-
-		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-		if(sdl->usevbo)
-		{
-			pfn_glBindBuffer( GL_ARRAY_BUFFER_ARB, texture->texCoordBufferName );
-			// Load The Data
-			pfn_glBufferSubData( GL_ARRAY_BUFFER_ARB, 0, 4*2*sizeof(GLfloat), texture->texCoord );
-			glTexCoordPointer( 2, GL_FLOAT, 0, (char *) NULL ); // we are using ARB VBO buffers
-		}
-		else
-		{
-			glTexCoordPointer(2, GL_FLOAT, 0, texture->texCoord);
-		}
 	}
 
-		return texture;
+	return texture;
 }
 
 static void texture_disable(sdl_info *sdl, texture_info * texture)
@@ -3027,13 +3189,13 @@ static void texture_disable(sdl_info *sdl, texture_info * texture)
 	if ( texture->type == TEXTURE_TYPE_SHADER )
 	{
 		assert ( sdl->useglsl );
-		pfn_glUseProgramObjectARB(0); // back to fixed function pipeline
+		//pfn_glUseProgramObjectARB(0); // back to fixed function pipeline
 	} else if ( texture->type == TEXTURE_TYPE_DYNAMIC )
 	{
 		pfn_glBindBuffer( GL_PIXEL_UNPACK_BUFFER_ARB, 0);
-		glDisable(texture->texTarget);
+		//glDisable(texture->texTarget);
 	} else {
-		glDisable(texture->texTarget);
+		//glDisable(texture->texTarget);
 	}
 }
 
@@ -3041,7 +3203,7 @@ static void texture_all_disable(sdl_info *sdl)
 {
 	if ( sdl->useglsl )
 	{
-		pfn_glUseProgramObjectARB(0); // back to fixed function pipeline
+		//pfn_glUseProgramObjectARB(0); // back to fixed function pipeline
 
 		pfn_glActiveTexture(GL_TEXTURE3);
 		glBindTexture(GL_TEXTURE_2D, 0);
