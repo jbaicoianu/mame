@@ -121,6 +121,7 @@ typedef void (APIENTRYP PFNGLDELETERENDERBUFFERSEXTPROC) (GLsizei n, const GLuin
 #define OVERFLOW_SIZE   (1<<10)
 
 #ifdef USE_WEBGL
+
 #define DRAWOGL_TEXTURE_INTERNALFORMAT GL_RGBA
 #define DRAWOGL_TEXTURE_FORMAT GL_RGBA
 #define DRAWOGL_TEXTURE_TYPE GL_UNSIGNED_BYTE
@@ -375,6 +376,12 @@ static PFNGLDELETEFRAMEBUFFERSEXTPROC pfn_glDeleteFramebuffers      = NULL;
 static PFNGLGENFRAMEBUFFERSEXTPROC pfn_glGenFramebuffers        = NULL;
 static PFNGLCHECKFRAMEBUFFERSTATUSEXTPROC pfn_glCheckFramebufferStatus  = NULL;
 static PFNGLFRAMEBUFFERTEXTURE2DEXTPROC pfn_glFramebufferTexture2D  = NULL;
+
+// ES2
+#ifdef USE_WEBGL
+static PFNGLENABLEVERTEXATTRIBARRAYPROC pfn_glEnableVertexAttribArray = NULL;
+static PFNGLVERTEXATTRIBPOINTERPROC pfn_glVertexAttribPointer = NULL;
+#endif
 
 static int glsl_shader_feature = GLSL_SHADER_FEAT_PLAIN;
 
@@ -892,6 +899,11 @@ static void loadGLExtensions(sdl_window_info *window)
 		pfn_glCheckFramebufferStatus = (PFNGLCHECKFRAMEBUFFERSTATUSEXTPROC) SDL_GL_GetProcAddress("glCheckFramebufferStatusEXT");
 		pfn_glFramebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DEXTPROC) SDL_GL_GetProcAddress("glFramebufferTexture2DEXT");
 	}
+	// ES2:
+	if ( sdl->usegles2 ) {
+		pfn_glEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC) SDL_GL_GetProcAddress("glEnableVertexAttribArray");
+		pfn_glVertexAttribPointer = (PFNGLVERTEXATTRIBPOINTERPROC) SDL_GL_GetProcAddress("glVertexAttribPointer");
+	}
 
 	if ( sdl->usevbo &&
 			( !pfn_glGenBuffers || !pfn_glDeleteBuffers ||
@@ -1154,7 +1166,7 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 	render_primitive *prim;
 	texture_info *texture=NULL;
 	float vofs, hofs;
-	int  pendingPrimitive=GL_NO_PRIMITIVE, curPrimitive=GL_NO_PRIMITIVE, scrnum, is_vector;
+	int  pendingPrimitive=GL_NO_PRIMITIVE, /*curPrimitive=GL_NO_PRIMITIVE, */scrnum, is_vector;
 	const screen_device *screen;
 
 	if (video_config.novideo)
@@ -1281,24 +1293,24 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 		// (0,h)     (w,h)
 
 		glViewport(0.0, 0.0, (GLsizei)window->width, (GLsizei)window->height);
-		if ( sdl->usegles2 ) {
-			float left = 0, right = window->width,
-						top = 0, bottom = window->height,
-						near = 10, far = -10;
+#ifdef USE_WEBGL
+    float left = 0, right = window->width,
+          top = 0, bottom = window->height,
+          near = 10, far = -10;
 
-			viewMatrix[0] = 2 / (right - left);
-			viewMatrix[5] = 2 / (top - bottom);
-			viewMatrix[10] = -2 / (far - near);
-			viewMatrix[12] = -(right + left) / (right - left);
-			viewMatrix[13] = -(top + bottom) / (top - bottom);
-			viewMatrix[14] = -(far + near) / (far - near);
-		} else {
-			glMatrixMode(GL_PROJECTION);
-			glLoadIdentity();
-			glOrtho(0.0, (GLdouble)window->width, (GLdouble)window->height, 0.0, 0.0, -1.0);
-			glMatrixMode(GL_MODELVIEW);
-			glLoadIdentity();
-		}
+    viewMatrix[0] = 2 / (right - left);
+    viewMatrix[5] = 2 / (top - bottom);
+    viewMatrix[10] = -2 / (far - near);
+    viewMatrix[12] = -(right + left) / (right - left);
+    viewMatrix[13] = -(top + bottom) / (top - bottom);
+    viewMatrix[14] = -(far + near) / (far - near);
+#else
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0.0, (GLdouble)window->width, (GLdouble)window->height, 0.0, 0.0, -1.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+#endif
 
 		if ( ! sdl->initialized )
 		{
@@ -1320,17 +1332,17 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 				{0, 2, 3},
 			};
 
-			glGenBuffers(1, &sdl->texVerticexBufferName);
-			glBindBuffer(GL_ARRAY_BUFFER, sdl->texVerticexBufferName);
-			glBufferData(GL_ARRAY_BUFFER, 4*2*sizeof(GLfloat), sdl->texVerticex, GL_STATIC_DRAW );
+			pfn_glGenBuffers(1, &sdl->texVerticexBufferName);
+			pfn_glBindBuffer(GL_ARRAY_BUFFER, sdl->texVerticexBufferName);
+			pfn_glBufferData(GL_ARRAY_BUFFER, 4*2*sizeof(GLfloat), sdl->texVerticex, GL_STATIC_DRAW );
 
 			GLuint indexBuffer;
-			glGenBuffers(1, &indexBuffer);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
-			glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * 3, indices, GL_STATIC_DRAW);
+			pfn_glGenBuffers(1, &indexBuffer);
+			pfn_glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
+			pfn_glBufferData(GL_ELEMENT_ARRAY_BUFFER, 2 * 3, indices, GL_STATIC_DRAW);
 
-			glEnableVertexAttribArray(0);
-			glEnableVertexAttribArray(1);
+			pfn_glEnableVertexAttribArray(0);
+			pfn_glEnableVertexAttribArray(1);
 #endif
 
 			sdl->initialized = 1;
@@ -1517,8 +1529,8 @@ static int drawogl_window_draw(sdl_window_info *window, UINT32 dc, int update)
 				numquads++;
 
 #ifdef USE_WEBGL
-				glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
-				glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
+				pfn_glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
+				pfn_glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
 				/*
 				glEnableVertexAttribArray(0);
@@ -2400,9 +2412,9 @@ static texture_info *texture_create(sdl_window_info *window, const render_texinf
 		// Load The Data
 		pfn_glBufferData( GL_ARRAY_BUFFER_ARB, 4*2*sizeof(GLfloat), texture->texCoord, GL_STREAM_DRAW );
 #ifndef USE_WEBGL
-		glTexCoordPointer( 2, GL_FLOAT, 0, (char *) NULL ); // we are using ARB VBO buffers
+		pfn_glTexCoordPointer( 2, GL_FLOAT, 0, (char *) NULL ); // we are using ARB VBO buffers
 #else
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
+	pfn_glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
 #endif
 	}
 	else
@@ -3149,11 +3161,16 @@ static texture_info * texture_update(sdl_window_info *window, const render_primi
 			int uniform_location;
 			float hofs = sdl->last_hofs, vofs = sdl->last_vofs;
 
+			GLfloat tmp[2];
+			tmp[0] = (GLfloat) (prim->bounds.x0 + hofs);
+			tmp[1] = (GLfloat) (prim->bounds.y0 + vofs);
 			uniform_location = pfn_glGetUniformLocationARB(sdl->glsl_program[shaderIdx], "offset");
-			glUniform2f(uniform_location, prim->bounds.x0 + hofs, prim->bounds.y0 + vofs);
+			pfn_glUniform2fvARB(uniform_location, 1, tmp);
 
+			tmp[0] = prim->bounds.x1 - prim->bounds.x0;
+			tmp[1] = prim->bounds.y1 - prim->bounds.y0;
 			uniform_location = pfn_glGetUniformLocationARB(sdl->glsl_program[shaderIdx], "size");
-			glUniform2f(uniform_location, prim->bounds.x1 - prim->bounds.x0, prim->bounds.y1 - prim->bounds.y0);
+			pfn_glUniform2fvARB(uniform_location, 1, tmp);
 
 			GL_CHECK_ERROR_NORMAL();
 
