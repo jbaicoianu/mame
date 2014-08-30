@@ -140,7 +140,7 @@ int gl_shader_check_error(GLhandleARB obj, GLenum obj_query, GLSLCheckMode m, co
 	GLsizei length;
 	GLcharARB buffer[255];
 	GLenum glerr;
-	GLint  param;
+	GLint  param = 0;
 	int    res=0;
 
 	glerr = gl_check_error(m, file, line);
