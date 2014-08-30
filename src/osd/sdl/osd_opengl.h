@@ -27,9 +27,17 @@
 		#define __INTRIN_H_
 	#endif
 	#if (SDLMAME_SDL2)
-	#include <SDL2/SDL_opengl.h>
+		#ifdef USE_WEBGL 
+			#include <SDL2/SDL_opengl.h>
+		#else
+			#include <SDL2/SDL_opengles2.h>
+		#endif
 	#else
-	#include <SDL/SDL_opengl.h>
+		#ifdef USE_WEBGL 
+			#include <SDL/SDL_opengl.h>
+		#else
+			#include <SDL/SDL_opengles2.h>
+		#endif
 	#endif
 #else
 	/*
